@@ -67,8 +67,8 @@ exemption and send the `X-XSRF-TOKEN` header instead.
 | `description` | string \| null | Optional, max 2000 |
 | `status` | string | Required: `Planning`, `In Progress`, `On Hold`, `Completed` |
 | `priority` | string | Required: `Low`, `Medium`, `High` |
-| `start_date` | string \| null | Optional, `YYYY-MM-DD` |
-| `due_date` | string \| null | Optional, `YYYY-MM-DD`, not earlier than `start_date` |
+| `start_date` | string \| null | Optional, `YYYY-MM-DD`, between `1900-01-01` and `2100-12-31` |
+| `due_date` | string \| null | Optional, `YYYY-MM-DD`, same bounds, not earlier than `start_date` |
 
 ### `GET /projects`
 
