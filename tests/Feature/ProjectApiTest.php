@@ -16,13 +16,13 @@ function projectPayload(array $overrides = []): array
     ], $overrides);
 }
 
-test('it lists every project', function () {
+test('it lists the first page of projects', function () {
     $this->seed(ProjectSeeder::class);
 
     $response = $this->getJson(route('projects.index'));
 
-    $response->assertOk()->assertJsonCount(12);
-    $response->assertJsonPath('0', [
+    $response->assertOk()->assertJsonCount(10, 'data');
+    $response->assertJsonPath('data.0', [
         'id' => 1,
         'client_name' => 'Acme Corporation',
         'project_name' => 'Corporate Website Redesign',
@@ -32,11 +32,114 @@ test('it lists every project', function () {
         'start_date' => '2026-06-01',
         'due_date' => '2026-07-15',
     ]);
+    $response->assertJsonPath('meta', [
+        'current_page' => 1,
+        'last_page' => 2,
+        'per_page' => 10,
+        'total' => 12,
+        'from' => 1,
+        'to' => 10,
+    ]);
 });
 
-test('it lists an empty array when there are no projects', function () {
-    $this->getJson(route('projects.index'))->assertOk()->assertExactJson([]);
+test('it lists the requested page', function () {
+    $this->seed(ProjectSeeder::class);
+
+    $this->getJson(route('projects.index', ['page' => 2]))
+        ->assertOk()
+        ->assertJsonCount(2, 'data')
+        ->assertJsonPath('data.0.id', 11)
+        ->assertJsonPath('meta.current_page', 2)
+        ->assertJsonPath('meta.from', 11);
 });
+
+test('it lists a custom page size', function () {
+    $this->seed(ProjectSeeder::class);
+
+    $this->getJson(route('projects.index', ['per_page' => 5, 'page' => 3]))
+        ->assertOk()
+        ->assertJsonCount(2, 'data')
+        ->assertJsonPath('meta.last_page', 3)
+        ->assertJsonPath('meta.per_page', 5);
+});
+
+test('it lists an empty page when there are no projects', function () {
+    $this->getJson(route('projects.index'))
+        ->assertOk()
+        ->assertJsonPath('data', [])
+        ->assertJsonPath('meta.total', 0)
+        ->assertJsonPath('meta.from', null);
+});
+
+test('it searches across client and project names', function (string $search, array $expected) {
+    $this->seed(ProjectSeeder::class);
+
+    $response = $this->getJson(route('projects.index', ['search' => $search]));
+
+    $response->assertOk()->assertJsonPath('meta.total', count($expected));
+
+    expect(array_column($response->json('data'), 'project_name'))->toBe($expected);
+})->with([
+    'client name' => ['GreenLeaf', ['Online Ordering System']],
+    'project name' => ['Property Listing', ['Property Listing Portal']],
+    'case insensitive' => ['greenleaf', ['Online Ordering System']],
+    'no match' => ['Nothing matches this', []],
+]);
+
+test('it ignores a blank search term', function () {
+    $this->seed(ProjectSeeder::class);
+
+    $this->getJson(route('projects.index', ['search' => '   ']))
+        ->assertOk()
+        ->assertJsonPath('meta.total', 12);
+});
+
+test('it filters by status and priority', function () {
+    $this->seed(ProjectSeeder::class);
+
+    $onlyStatus = $this->getJson(route('projects.index', ['status' => 'Completed']));
+    $onlyStatus->assertOk();
+
+    expect($onlyStatus->json('meta.total'))->toBeGreaterThan(0);
+    expect(array_unique(array_column($onlyStatus->json('data'), 'status')))
+        ->toBe(['Completed']);
+
+    $both = $this->getJson(route('projects.index', [
+        'status' => 'In Progress',
+        'priority' => 'High',
+    ]));
+    $both->assertOk();
+
+    expect($both->json('meta.total'))->toBeGreaterThan(0);
+    expect(array_unique(array_column($both->json('data'), 'status')))
+        ->toBe(['In Progress']);
+    expect(array_unique(array_column($both->json('data'), 'priority')))
+        ->toBe(['High']);
+});
+
+test('it paginates the filtered results', function () {
+    Project::factory()->count(15)->create(['status' => 'Planning']);
+    Project::factory()->count(3)->create(['status' => 'Completed']);
+
+    $this->getJson(route('projects.index', ['status' => 'Planning', 'per_page' => 6]))
+        ->assertOk()
+        ->assertJsonCount(6, 'data')
+        ->assertJsonPath('meta.total', 15)
+        ->assertJsonPath('meta.last_page', 3);
+});
+
+test('it rejects invalid list filters', function (array $query, string $field) {
+    $this->getJson(route('projects.index', $query))
+        ->assertStatus(422)
+        ->assertJsonValidationErrors($field);
+})->with([
+    'unknown status' => [['status' => 'Archived'], 'status'],
+    'unknown priority' => [['priority' => 'Urgent'], 'priority'],
+    'page below one' => [['page' => 0], 'page'],
+    'page size below one' => [['per_page' => 0], 'per_page'],
+    'page size above the cap' => [['per_page' => 101], 'per_page'],
+    'search beyond the length limit' => [['search' => str_repeat('a', 256)], 'search'],
+]);
 
 test('it returns a single project', function () {
     $this->seed(ProjectSeeder::class);

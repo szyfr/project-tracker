@@ -1,5 +1,11 @@
 import ProjectController from '@/actions/App/Http/Controllers/ProjectController';
-import type { Project, ProjectErrors, ProjectPayload } from '@/types/project';
+import type {
+    Project,
+    ProjectErrors,
+    ProjectPage,
+    ProjectPayload,
+    ProjectQuery,
+} from '@/types/project';
 
 export class ApiError extends Error {
     constructor(
@@ -76,8 +82,18 @@ async function request<T>(
     );
 }
 
-export function fetchProjects(): Promise<Project[]> {
-    return request<Project[]>(ProjectController.index.url(), 'get');
+export function fetchProjects(query: ProjectQuery): Promise<ProjectPage> {
+    return request<ProjectPage>(
+        ProjectController.index.url({
+            query: {
+                search: query.search === '' ? null : query.search,
+                status: query.status,
+                priority: query.priority,
+                page: query.page === 1 ? null : query.page,
+            },
+        }),
+        'get',
+    );
 }
 
 export function fetchProject(id: number): Promise<Project> {

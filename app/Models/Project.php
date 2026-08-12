@@ -6,6 +6,8 @@ use App\Enums\ProjectPriority;
 use App\Enums\ProjectStatus;
 use Database\Factories\ProjectFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -41,5 +43,43 @@ class Project extends Model
             'start_date' => 'date',
             'due_date' => 'date',
         ];
+    }
+
+    /**
+     * Limit the query to projects whose client or project name contains the term.
+     *
+     * @param  Builder<Project>  $query
+     */
+    #[Scope]
+    protected function matchingName(Builder $query, ?string $search): void
+    {
+        $query->when($search !== null, function (Builder $query) use ($search): void {
+            $query->where(function (Builder $query) use ($search): void {
+                $query->where('client_name', 'like', '%'.$search.'%')
+                    ->orWhere('project_name', 'like', '%'.$search.'%');
+            });
+        });
+    }
+
+    /**
+     * Limit the query to projects with the given status.
+     *
+     * @param  Builder<Project>  $query
+     */
+    #[Scope]
+    protected function withStatus(Builder $query, ?ProjectStatus $status): void
+    {
+        $query->when($status !== null, fn (Builder $query) => $query->where('status', $status));
+    }
+
+    /**
+     * Limit the query to projects with the given priority.
+     *
+     * @param  Builder<Project>  $query
+     */
+    #[Scope]
+    protected function withPriority(Builder $query, ?ProjectPriority $priority): void
+    {
+        $query->when($priority !== null, fn (Builder $query) => $query->where('priority', $priority));
     }
 }

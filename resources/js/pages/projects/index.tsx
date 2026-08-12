@@ -1,6 +1,6 @@
 import { Head } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DeleteProjectDialog } from '@/components/projects/delete-project-dialog';
 import {
     ANY_VALUE,
@@ -9,40 +9,78 @@ import {
 import type { ProjectFilters } from '@/components/projects/project-filters';
 import { ProjectFiltersBarSkeleton } from '@/components/projects/project-filters-skeleton';
 import { ProjectFormDialog } from '@/components/projects/project-form-dialog';
+import { ProjectsPagination } from '@/components/projects/projects-pagination';
 import { ProjectsTable } from '@/components/projects/projects-table';
 import { ProjectsTableSkeleton } from '@/components/projects/projects-table-skeleton';
 import { Button } from '@/components/ui/button';
 import { useProjects } from '@/hooks/use-projects';
 import { index } from '@/routes/projects';
-import type { Project } from '@/types/project';
+import type { Project, ProjectPriority, ProjectStatus } from '@/types/project';
+
+const SEARCH_DEBOUNCE_MS = 300;
+
+const EMPTY_FILTERS: ProjectFilters = {
+    search: '',
+    status: ANY_VALUE,
+    priority: ANY_VALUE,
+};
 
 export default function Projects() {
-    const { projects, loading, error, reload } = useProjects();
+    const [filters, setFilters] = useState<ProjectFilters>(EMPTY_FILTERS);
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [page, setPage] = useState(1);
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState<Project | null>(null);
     const [deleting, setDeleting] = useState<Project | null>(null);
-    const [filters, setFilters] = useState<ProjectFilters>({
-        search: '',
-        status: ANY_VALUE,
-        priority: ANY_VALUE,
-    });
 
-    const search = filters.search.trim().toLowerCase();
-
-    const visibleProjects = projects.filter((project) => {
-        const matchesSearch =
-            search === '' ||
-            project.client_name.toLowerCase().includes(search) ||
-            project.project_name.toLowerCase().includes(search);
-
-        return (
-            matchesSearch &&
-            (filters.status === ANY_VALUE ||
-                project.status === filters.status) &&
-            (filters.priority === ANY_VALUE ||
-                project.priority === filters.priority)
+    useEffect(() => {
+        const timeout = setTimeout(
+            () => setDebouncedSearch(filters.search.trim()),
+            SEARCH_DEBOUNCE_MS,
         );
-    });
+
+        return () => clearTimeout(timeout);
+    }, [filters.search]);
+
+    const query = useMemo(
+        () => ({
+            search: debouncedSearch,
+            status:
+                filters.status === ANY_VALUE
+                    ? null
+                    : (filters.status as ProjectStatus),
+            priority:
+                filters.priority === ANY_VALUE
+                    ? null
+                    : (filters.priority as ProjectPriority),
+            page,
+        }),
+        [debouncedSearch, filters.status, filters.priority, page],
+    );
+
+    const { projects, meta, loading, error, reload } = useProjects(query);
+
+    const filtered =
+        query.search !== '' || query.status !== null || query.priority !== null;
+
+    /**
+     * Step back a page when the deleted project was the last one on it, so the
+     * table never lands on a page that no longer exists.
+     */
+    function handleDeleted(): void {
+        if (projects.length === 1 && page > 1) {
+            setPage(page - 1);
+
+            return;
+        }
+
+        reload();
+    }
+
+    function changeFilters(next: ProjectFilters): void {
+        setFilters(next);
+        setPage(1);
+    }
 
     function openCreateForm(): void {
         setEditing(null);
@@ -53,6 +91,9 @@ export default function Projects() {
         setEditing(project);
         setFormOpen(true);
     }
+
+    const initialLoading = loading && meta === null;
+    const showFilters = meta !== null && (meta.total > 0 || filtered);
 
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4">
@@ -75,7 +116,7 @@ export default function Projects() {
                 </Button>
             </div>
 
-            {loading && (
+            {initialLoading && (
                 <>
                     <ProjectFiltersBarSkeleton />
 
@@ -83,7 +124,7 @@ export default function Projects() {
                 </>
             )}
 
-            {!loading && error && (
+            {!initialLoading && error && (
                 <div className="flex flex-col items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-6">
                     <div>
                         <p className="font-medium">Could not load projects</p>
@@ -97,44 +138,69 @@ export default function Projects() {
                 </div>
             )}
 
-            {!loading && !error && projects.length === 0 && (
-                <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center">
-                    <div>
-                        <p className="font-medium">No projects yet</p>
-
-                        <p className="text-sm text-muted-foreground">
-                            Create your first project to start tracking it.
-                        </p>
-                    </div>
-
-                    <Button onClick={openCreateForm}>
-                        <Plus />
-                        New project
-                    </Button>
-                </div>
-            )}
-
-            {!loading && !error && projects.length > 0 && (
+            {!initialLoading && !error && (
                 <>
-                    <ProjectFiltersBar
-                        filters={filters}
-                        onChange={setFilters}
-                    />
-
-                    {visibleProjects.length > 0 ? (
-                        <ProjectsTable
-                            projects={visibleProjects}
-                            onEdit={openEditForm}
-                            onDelete={setDeleting}
+                    {showFilters && (
+                        <ProjectFiltersBar
+                            filters={filters}
+                            onChange={changeFilters}
                         />
-                    ) : (
-                        <div className="rounded-xl border border-dashed p-12 text-center">
-                            <p className="font-medium">No matching projects</p>
+                    )}
 
-                            <p className="text-sm text-muted-foreground">
-                                Try a different search or clear the filters.
-                            </p>
+                    {loading && (
+                        <ProjectsTableSkeleton
+                            rows={Math.max(projects.length, 1)}
+                        />
+                    )}
+
+                    {!loading && meta !== null && meta.total === 0 && (
+                        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center">
+                            {filtered ? (
+                                <div>
+                                    <p className="font-medium">
+                                        No matching projects
+                                    </p>
+
+                                    <p className="text-sm text-muted-foreground">
+                                        Try a different search or clear the
+                                        filters.
+                                    </p>
+                                </div>
+                            ) : (
+                                <>
+                                    <div>
+                                        <p className="font-medium">
+                                            No projects yet
+                                        </p>
+
+                                        <p className="text-sm text-muted-foreground">
+                                            Create your first project to start
+                                            tracking it.
+                                        </p>
+                                    </div>
+
+                                    <Button onClick={openCreateForm}>
+                                        <Plus />
+                                        New project
+                                    </Button>
+                                </>
+                            )}
                         </div>
+                    )}
+
+                    {!loading && meta !== null && meta.total > 0 && (
+                        <>
+                            <ProjectsTable
+                                projects={projects}
+                                onEdit={openEditForm}
+                                onDelete={setDeleting}
+                            />
+
+                            <ProjectsPagination
+                                meta={meta}
+                                onPageChange={setPage}
+                            />
+                        </>
                     )}
                 </>
             )}
@@ -150,7 +216,7 @@ export default function Projects() {
             <DeleteProjectDialog
                 project={deleting}
                 onOpenChange={(open) => !open && setDeleting(null)}
-                onDeleted={reload}
+                onDeleted={handleDeleted}
             />
         </div>
     );

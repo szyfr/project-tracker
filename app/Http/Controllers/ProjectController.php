@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\ProjectPriority;
+use App\Enums\ProjectStatus;
+use App\Http\Requests\IndexProjectRequest;
 use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\UpdateProjectRequest;
 use App\Http\Resources\ProjectResource;
 use App\Models\Project;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -15,17 +17,33 @@ use Inertia\Response;
 class ProjectController extends Controller
 {
     /**
-     * Render the project list page, or return every project as JSON.
+     * Render the project list page, or return a filtered page of projects as JSON.
      */
-    public function index(Request $request): Response|JsonResponse
+    public function index(IndexProjectRequest $request): Response|JsonResponse
     {
         if (! $request->expectsJson()) {
             return Inertia::render('projects/index');
         }
 
-        return response()->json(
-            ProjectResource::collection(Project::query()->orderBy('id')->get())
-        );
+        $projects = Project::query()
+            ->matchingName($request->searchTerm())
+            ->withStatus($request->enum('status', ProjectStatus::class))
+            ->withPriority($request->enum('priority', ProjectPriority::class))
+            ->orderBy('id')
+            ->paginate($request->perPage())
+            ->withQueryString();
+
+        return response()->json([
+            'data' => ProjectResource::collection($projects->items()),
+            'meta' => [
+                'current_page' => $projects->currentPage(),
+                'last_page' => $projects->lastPage(),
+                'per_page' => $projects->perPage(),
+                'total' => $projects->total(),
+                'from' => $projects->firstItem(),
+                'to' => $projects->lastItem(),
+            ],
+        ]);
     }
 
     /**

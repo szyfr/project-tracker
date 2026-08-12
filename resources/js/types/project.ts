@@ -22,6 +22,27 @@ export type Project = {
     due_date: string | null;
 };
 
+export type PaginationMeta = {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    from: number | null;
+    to: number | null;
+};
+
+export type ProjectPage = {
+    data: Project[];
+    meta: PaginationMeta;
+};
+
+export type ProjectQuery = {
+    search: string;
+    status: ProjectStatus | null;
+    priority: ProjectPriority | null;
+    page: number;
+};
+
 export type ProjectPayload = {
     client_name: string;
     project_name: string;
