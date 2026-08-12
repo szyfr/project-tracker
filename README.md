@@ -56,8 +56,8 @@ but it creates a ready-to-use login alongside the sample projects:
 
 Set `ADMIN_PASSWORD` in `.env` before seeding to use a different password. The
 app has no roles or permissions, so "admin" here just means the account you sign
-in with; the project endpoints are public either way. Seed only the account with
-`php artisan db:seed --class=AdminUserSeeder`.
+in with — but signing in is required, for the API as much as for the page. Seed
+only the account with `php artisan db:seed --class=AdminUserSeeder`.
 
 To run the app without installing PHP or Node locally, see
 [Running with Docker](#running-with-docker) instead.
@@ -129,7 +129,7 @@ external database instead; the entrypoint then skips the SQLite file entirely.
 
 | Concern | Location |
 | --- | --- |
-| Routes | `routes/web.php` (`Route::resource('projects')`) |
+| Routes | `routes/web.php` (`Route::resource('projects')`, inside the `auth` middleware group) |
 | Controller | `app/Http/Controllers/ProjectController.php` |
 | Validation | `app/Http/Requests/{Store,Update}ProjectRequest.php`, rules shared in `app/Concerns/ProjectValidationRules.php` |
 | Model and enums | `app/Models/Project.php`, `app/Enums/Project{Status,Priority}.php` |
@@ -149,10 +149,125 @@ validation failures arrive as `422` responses.
 All endpoints accept and return `snake_case` JSON — send
 `Accept: application/json` to get JSON back from `GET /projects`.
 
-The endpoints are public and exempt from CSRF verification
-(`bootstrap/app.php`), so they work from curl, Postman, or any HTTP client
-without a session. If these routes ever move behind authentication, drop that
-exemption and send the `X-XSRF-TOKEN` header instead.
+The endpoints sit behind the `auth` middleware, so every request needs a valid
+session cookie — the same one the browser gets after signing in. They are
+exempt from CSRF verification (`bootstrap/app.php`), so once a client holds that
+cookie it does not also need to send `X-XSRF-TOKEN`. Without a session, a
+request that sends `Accept: application/json` gets a `401`; one that does not
+gets a `302` to `/login`.
+
+See [Testing the API in Postman](#testing-the-api-in-postman) for a walkthrough
+of getting that cookie.
+
+### Testing the API in Postman
+
+Postman keeps a per-domain cookie jar and reuses it across requests, so the only
+extra work is the login request itself — and login *is* CSRF protected, so it
+needs a token that the project endpoints do not.
+
+Seed the database first (`php artisan db:seed`) so the `admin@example.com`
+account exists.
+
+#### Step 1 — Prime the session
+
+Send `GET http://localhost:8000/login`.
+
+The response sets two cookies for `localhost`: `laravel-session` (the session
+itself) and `XSRF-TOKEN` (the CSRF token). Postman stores both automatically.
+
+#### Step 2 — Read the CSRF token
+
+Open the **Cookies** link under the Send button, find `XSRF-TOKEN` for
+`localhost`, and copy its value. The value is URL-encoded — decode it before
+using it, which in practice means turning any trailing `%3D` back into `=`.
+
+Skip this step if you use the [pre-request script](#automating-the-token) below.
+
+#### Step 3 — Log in
+
+Send `POST http://localhost:8000/login` with these headers:
+
+| Header | Value |
+| --- | --- |
+| `Accept` | `application/json` |
+| `Content-Type` | `application/json` |
+| `X-XSRF-TOKEN` | the decoded token from step 2 |
+
+and this raw JSON body:
+
+```json
+{
+  "email": "admin@example.com",
+  "password": "password"
+}
+```
+
+A successful login returns `200` with `{"two_factor": false}` and refreshes the
+session cookie in the jar. Without `Accept: application/json` you get a `302` to
+`/projects` instead, which works just as well but is harder to read.
+
+#### Step 4 — Call the endpoints
+
+Nothing further is needed: Postman attaches the session cookie on its own, and
+the project routes are CSRF-exempt, so no `X-XSRF-TOKEN` header goes on them.
+
+Send `GET http://localhost:8000/projects` with `Accept: application/json` and
+you get the paginated list. `POST`, `PUT`, and `DELETE` also need
+`Content-Type: application/json` for their bodies. Query parameters such as
+`?search=acme&status=In%20Progress&per_page=5` go on the request as usual.
+
+#### Automating the token
+
+To avoid copying the token by hand, add this to the collection's **Pre-request
+Script** tab so every request in the collection carries a fresh header:
+
+```js
+const jar = pm.cookies.jar();
+
+jar.get(pm.request.url.getHost(), 'XSRF-TOKEN', (error, token) => {
+    if (token) {
+        pm.request.headers.upsert({
+            key: 'X-XSRF-TOKEN',
+            value: decodeURIComponent(token),
+        });
+    }
+});
+```
+
+Scripts can only read cookies for allowlisted domains, so add `localhost` under
+**Cookies → Domains Allowlist** first, otherwise `jar.get` returns nothing and
+login fails with a `419`.
+
+#### Troubleshooting
+
+| Symptom | Cause |
+| --- | --- |
+| `401 Unauthenticated.` | No session cookie, or it expired. Log in again |
+| A `302` to `/login` instead of JSON | The `Accept: application/json` header is missing |
+| `419` on `POST /login` | Missing, stale, or still URL-encoded `X-XSRF-TOKEN`. Re-send `GET /login` and recopy |
+| `422` on `POST /login` | Wrong credentials, or the database was never seeded |
+| Cookie jar is empty | Postman's cookie jar is per-domain — `127.0.0.1` and `localhost` are different jars. Pick one and stay on it |
+
+#### Logging out
+
+Send `POST http://localhost:8000/logout` with the `X-XSRF-TOKEN` header — it is
+CSRF protected like login. Clearing the cookie jar has the same practical
+effect.
+
+#### The same thing in curl
+
+curl has no cookie jar unless you ask for one, so pass `-c` to save cookies and
+`-b` to send them:
+
+```bash
+curl -c cookies.txt http://localhost:8000/login > /dev/null
+curl -b cookies.txt -c cookies.txt -X POST http://localhost:8000/login \
+  -H "Accept: application/json" -H "Content-Type: application/json" \
+  -H "X-XSRF-TOKEN: $(grep XSRF-TOKEN cookies.txt | cut -f7 | sed 's/%3D/=/g')" \
+  -d '{"email": "admin@example.com", "password": "password"}'
+```
+
+Every later call then just needs `-b cookies.txt`.
 
 ### Project object
 
@@ -215,8 +330,11 @@ Returns one project, or `404` if it does not exist.
 
 Creates a project and returns it with `201 Created`.
 
+Log in first (see [Testing the API in Postman](#the-same-thing-in-curl) for the
+two curl calls that produce `cookies.txt`), then:
+
 ```bash
-curl -X POST http://localhost:8000/projects \
+curl -b cookies.txt -X POST http://localhost:8000/projects \
   -H "Accept: application/json" -H "Content-Type: application/json" \
   -d '{
     "client_name": "Acme Corporation",
@@ -243,6 +361,7 @@ Deletes a project and returns `204 No Content`, or `404` if it does not exist.
 
 | Status | Meaning |
 | --- | --- |
+| `401` | Unauthenticated — no valid session cookie. Requests that do not send `Accept: application/json` get a `302` to `/login` instead |
 | `404` | Project not found — `{"message": "Resource not found."}` |
 | `422` | Validation failed |
 | `500` | Unexpected server error |
@@ -262,12 +381,13 @@ Validation failures list every failing field:
 
 ## Assumptions Made
 
-- **The project endpoints are public.** The brief did not call for auth, so the
-  routes sit outside the auth middleware and are exempt from CSRF verification
-  so they work from curl or Postman. The starter kit's login and registration
-  remain available, and authenticated users land on `/projects`; putting the
-  tracker behind `auth` means adding the middleware and dropping that CSRF
-  exemption.
+- **The project endpoints require a session, not a token.** The routes sit
+  behind the `auth` middleware and authenticate with the starter kit's session
+  cookie; there is no token guard and no Sanctum. They stay exempt from CSRF
+  verification (`bootstrap/app.php`) so a non-browser client needs only the
+  cookie — a deliberate trade of CSRF protection on those routes for a simpler
+  API. Adding Sanctum tokens would be the move if third-party clients ever need
+  access.
 - **Projects have no owner.** There is no `user_id` on `projects` — every user
   sees the same list. Adding multi-tenancy later means a foreign key, a scope,
   and a policy.

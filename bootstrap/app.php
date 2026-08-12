@@ -18,7 +18,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
-        // The projects endpoints are a public, session-less REST API.
+        // The projects endpoints authenticate with the session cookie, but stay
+        // exempt from CSRF so non-browser clients need nothing beyond it.
         $middleware->validateCsrfTokens(except: ['projects', 'projects/*']);
 
         $middleware->web(append: [
