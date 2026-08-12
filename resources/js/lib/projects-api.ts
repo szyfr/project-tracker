@@ -17,14 +17,6 @@ type ValidationResponse = {
     errors?: Record<string, string[]>;
 };
 
-function csrfToken(): string {
-    const cookie = document.cookie
-        .split('; ')
-        .find((entry) => entry.startsWith('XSRF-TOKEN='));
-
-    return cookie ? decodeURIComponent(cookie.split('=')[1]) : '';
-}
-
 function firstMessagePerField(errors: Record<string, string[]>): ProjectErrors {
     return Object.fromEntries(
         Object.entries(errors).map(([field, messages]) => [field, messages[0]]),
@@ -44,7 +36,6 @@ async function request<T>(
             headers: {
                 Accept: 'application/json',
                 'Content-Type': 'application/json',
-                'X-XSRF-TOKEN': csrfToken(),
             },
             body: body === undefined ? undefined : JSON.stringify(body),
         });
