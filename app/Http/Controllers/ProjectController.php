@@ -35,6 +35,7 @@ class ProjectController extends Controller
 
         return response()->json([
             'data' => ProjectResource::collection($projects->items()),
+            'status_counts' => $this->statusCounts(),
             'meta' => [
                 'current_page' => $projects->currentPage(),
                 'last_page' => $projects->lastPage(),
@@ -44,6 +45,26 @@ class ProjectController extends Controller
                 'to' => $projects->lastItem(),
             ],
         ]);
+    }
+
+    /**
+     * Count every project by status, including statuses nothing is using yet.
+     *
+     * @return array<string, int>
+     */
+    private function statusCounts(): array
+    {
+        $counts = Project::query()
+            ->toBase()
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        return collect(ProjectStatus::cases())
+            ->mapWithKeys(fn (ProjectStatus $status): array => [
+                $status->value => (int) $counts->get($status->value, 0),
+            ])
+            ->all();
     }
 
     /**

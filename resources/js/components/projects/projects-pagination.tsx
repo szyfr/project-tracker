@@ -20,35 +20,40 @@ export function ProjectsPagination({
             aria-label="Project pages"
         >
             <p className="text-sm text-muted-foreground">
-                Showing {from}–{to} of {meta.total}{' '}
+                <span className="tabular-nums">
+                    {from}–{to}
+                </span>{' '}
+                of <span className="tabular-nums">{meta.total}</span>{' '}
                 {meta.total === 1 ? 'project' : 'projects'}
             </p>
 
-            <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">
-                    Page {meta.current_page} of {meta.last_page}
-                </span>
+            {meta.last_page > 1 && (
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        disabled={meta.current_page <= 1}
+                        onClick={() => onPageChange(meta.current_page - 1)}
+                        aria-label="Previous page"
+                    >
+                        <ChevronLeft />
+                    </Button>
 
-                <Button
-                    variant="outline"
-                    size="icon"
-                    disabled={meta.current_page <= 1}
-                    onClick={() => onPageChange(meta.current_page - 1)}
-                    aria-label="Previous page"
-                >
-                    <ChevronLeft />
-                </Button>
+                    <span className="text-sm text-muted-foreground tabular-nums">
+                        Page {meta.current_page} of {meta.last_page}
+                    </span>
 
-                <Button
-                    variant="outline"
-                    size="icon"
-                    disabled={meta.current_page >= meta.last_page}
-                    onClick={() => onPageChange(meta.current_page + 1)}
-                    aria-label="Next page"
-                >
-                    <ChevronRight />
-                </Button>
-            </div>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        disabled={meta.current_page >= meta.last_page}
+                        onClick={() => onPageChange(meta.current_page + 1)}
+                        aria-label="Next page"
+                    >
+                        <ChevronRight />
+                    </Button>
+                </div>
+            )}
         </nav>
     );
 }

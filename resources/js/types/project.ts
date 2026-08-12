@@ -31,8 +31,11 @@ export type PaginationMeta = {
     to: number | null;
 };
 
+export type ProjectStatusCounts = Record<ProjectStatus, number>;
+
 export type ProjectPage = {
     data: Project[];
+    status_counts: ProjectStatusCounts;
     meta: PaginationMeta;
 };
 

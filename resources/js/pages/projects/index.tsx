@@ -1,5 +1,5 @@
 import { Head } from '@inertiajs/react';
-import { Plus } from 'lucide-react';
+import { FolderPlus, Plus, SearchX, TriangleAlert } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { DeleteProjectDialog } from '@/components/projects/delete-project-dialog';
 import {
@@ -9,12 +9,16 @@ import {
 import type { ProjectFilters } from '@/components/projects/project-filters';
 import { ProjectFiltersBarSkeleton } from '@/components/projects/project-filters-skeleton';
 import { ProjectFormDialog } from '@/components/projects/project-form-dialog';
+import { ProjectStatusTiles } from '@/components/projects/project-status-tiles';
+import { ProjectStatusTilesSkeleton } from '@/components/projects/project-status-tiles-skeleton';
+import { ProjectsCardList } from '@/components/projects/projects-card-list';
 import { ProjectsPagination } from '@/components/projects/projects-pagination';
 import { ProjectsTable } from '@/components/projects/projects-table';
 import { ProjectsTableSkeleton } from '@/components/projects/projects-table-skeleton';
 import { Button } from '@/components/ui/button';
 import { useProjects } from '@/hooks/use-projects';
 import { index } from '@/routes/projects';
+import { PROJECT_STATUSES } from '@/types/project';
 import type { Project, ProjectPriority, ProjectStatus } from '@/types/project';
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -58,14 +62,15 @@ export default function Projects() {
         [debouncedSearch, filters.status, filters.priority, page],
     );
 
-    const { projects, meta, loading, error, reload } = useProjects(query);
+    const { projects, statusCounts, meta, loading, error, reload } =
+        useProjects(query);
 
     const filtered =
         query.search !== '' || query.status !== null || query.priority !== null;
 
     /**
      * Step back a page when the deleted project was the last one on it, so the
-     * table never lands on a page that no longer exists.
+     * list never lands on a page that no longer exists.
      */
     function handleDeleted(): void {
         if (projects.length === 1 && page > 1) {
@@ -82,6 +87,14 @@ export default function Projects() {
         setPage(1);
     }
 
+    function changeStatus(status: ProjectStatus | null): void {
+        changeFilters({ ...filters, status: status ?? ANY_VALUE });
+    }
+
+    function clearFilters(): void {
+        changeFilters(EMPTY_FILTERS);
+    }
+
     function openCreateForm(): void {
         setEditing(null);
         setFormOpen(true);
@@ -93,15 +106,24 @@ export default function Projects() {
     }
 
     const initialLoading = loading && meta === null;
-    const showFilters = meta !== null && (meta.total > 0 || filtered);
+
+    const totalProjects =
+        statusCounts === null
+            ? 0
+            : PROJECT_STATUSES.reduce(
+                  (sum, status) => sum + statusCounts[status],
+                  0,
+              );
+
+    const hasProjects = statusCounts !== null && totalProjects > 0;
 
     return (
-        <div className="flex h-full flex-1 flex-col gap-6 p-4">
+        <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <Head title="Projects" />
 
-            <div className="flex flex-wrap items-end justify-between gap-4">
+            <header className="flex flex-wrap items-start justify-between gap-4 border-b pb-4">
                 <div>
-                    <h1 className="text-xl font-semibold tracking-tight">
+                    <h1 className="text-2xl font-semibold tracking-tight">
                         Projects
                     </h1>
 
@@ -114,10 +136,12 @@ export default function Projects() {
                     <Plus />
                     New project
                 </Button>
-            </div>
+            </header>
 
             {initialLoading && (
                 <>
+                    <ProjectStatusTilesSkeleton />
+
                     <ProjectFiltersBarSkeleton />
 
                     <ProjectsTableSkeleton />
@@ -125,7 +149,9 @@ export default function Projects() {
             )}
 
             {!initialLoading && error && (
-                <div className="flex flex-col items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-6">
+                <div className="flex flex-col items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-10 text-center">
+                    <TriangleAlert className="size-6 text-destructive" />
+
                     <div>
                         <p className="font-medium">Could not load projects</p>
 
@@ -140,11 +166,21 @@ export default function Projects() {
 
             {!initialLoading && !error && (
                 <>
-                    {showFilters && (
-                        <ProjectFiltersBar
-                            filters={filters}
-                            onChange={changeFilters}
-                        />
+                    {hasProjects && (
+                        <>
+                            <ProjectStatusTiles
+                                counts={statusCounts}
+                                active={query.status}
+                                onSelect={changeStatus}
+                            />
+
+                            <ProjectFiltersBar
+                                filters={filters}
+                                filtered={filtered}
+                                onChange={changeFilters}
+                                onClear={clearFilters}
+                            />
+                        </>
                     )}
 
                     {loading && (
@@ -156,18 +192,31 @@ export default function Projects() {
                     {!loading && meta !== null && meta.total === 0 && (
                         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-12 text-center">
                             {filtered ? (
-                                <div>
-                                    <p className="font-medium">
-                                        No matching projects
-                                    </p>
+                                <>
+                                    <SearchX className="size-6 text-muted-foreground" />
 
-                                    <p className="text-sm text-muted-foreground">
-                                        Try a different search or clear the
-                                        filters.
-                                    </p>
-                                </div>
+                                    <div>
+                                        <p className="font-medium">
+                                            No matching projects
+                                        </p>
+
+                                        <p className="text-sm text-muted-foreground">
+                                            Try a different search, or clear the
+                                            filters to see everything.
+                                        </p>
+                                    </div>
+
+                                    <Button
+                                        variant="outline"
+                                        onClick={clearFilters}
+                                    >
+                                        Clear filters
+                                    </Button>
+                                </>
                             ) : (
                                 <>
+                                    <FolderPlus className="size-6 text-muted-foreground" />
+
                                     <div>
                                         <p className="font-medium">
                                             No projects yet
@@ -191,6 +240,12 @@ export default function Projects() {
                     {!loading && meta !== null && meta.total > 0 && (
                         <>
                             <ProjectsTable
+                                projects={projects}
+                                onEdit={openEditForm}
+                                onDelete={setDeleting}
+                            />
+
+                            <ProjectsCardList
                                 projects={projects}
                                 onEdit={openEditForm}
                                 onDelete={setDeleting}

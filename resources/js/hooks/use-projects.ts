@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, fetchProjects } from '@/lib/projects-api';
-import type { PaginationMeta, Project, ProjectQuery } from '@/types/project';
+import type {
+    PaginationMeta,
+    Project,
+    ProjectQuery,
+    ProjectStatusCounts,
+} from '@/types/project';
 
 type UseProjects = {
     projects: Project[];
+    statusCounts: ProjectStatusCounts | null;
     meta: PaginationMeta | null;
     loading: boolean;
     error: string | null;
@@ -13,6 +19,7 @@ type UseProjects = {
 type LoadedProjects = {
     key: string;
     projects: Project[];
+    statusCounts: ProjectStatusCounts | null;
     meta: PaginationMeta | null;
     error: string | null;
 };
@@ -47,6 +54,7 @@ export function useProjects(query: ProjectQuery): UseProjects {
                 setLoaded({
                     key: requestKey,
                     projects: loadedPage.data,
+                    statusCounts: loadedPage.status_counts,
                     meta: loadedPage.meta,
                     error: null,
                 });
@@ -59,6 +67,7 @@ export function useProjects(query: ProjectQuery): UseProjects {
                 setLoaded({
                     key: requestKey,
                     projects: [],
+                    statusCounts: null,
                     meta: null,
                     error:
                         exception instanceof ApiError
@@ -74,6 +83,7 @@ export function useProjects(query: ProjectQuery): UseProjects {
 
     return {
         projects: loaded?.projects ?? [],
+        statusCounts: loaded?.statusCounts ?? null,
         meta: loaded?.meta ?? null,
         loading: !settled,
         error: settled ? loaded.error : null,

@@ -133,6 +133,21 @@ test('it paginates the filtered results', function () {
         ->assertJsonPath('meta.last_page', 3);
 });
 
+test('it counts every project by status regardless of the active filters', function () {
+    Project::factory()->count(4)->create(['status' => 'Planning']);
+    Project::factory()->count(2)->create(['status' => 'On Hold']);
+    Project::factory()->count(1)->create(['status' => 'Completed']);
+
+    $this->getJson(route('projects.index', ['status' => 'Completed']))
+        ->assertOk()
+        ->assertJsonPath('status_counts', [
+            'Planning' => 4,
+            'In Progress' => 0,
+            'On Hold' => 2,
+            'Completed' => 1,
+        ]);
+});
+
 test('it rejects invalid list filters', function (array $query, string $field) {
     $this->getJson(route('projects.index', $query))
         ->assertStatus(422)
