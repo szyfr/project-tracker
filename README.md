@@ -42,7 +42,22 @@ The app is then available at http://localhost:8000; the tracker lives at `/proje
 
 `composer setup` creates `.env` from `.env.example` and uses the SQLite database at
 `database/database.sqlite`. Seeding is idempotent — it inserts the same twelve
-projects by id, so re-running never duplicates them.
+projects by id and the same admin account by email, so re-running never
+duplicates them.
+
+### Seeded admin account
+
+`php artisan db:seed` is optional — the tracker works with an empty database —
+but it creates a ready-to-use login alongside the sample projects:
+
+| Email | Password |
+| --- | --- |
+| `admin@example.com` | `password` |
+
+Set `ADMIN_PASSWORD` in `.env` before seeding to use a different password. The
+app has no roles or permissions, so "admin" here just means the account you sign
+in with; the project endpoints are public either way. Seed only the account with
+`php artisan db:seed --class=AdminUserSeeder`.
 
 To run the app without installing PHP or Node locally, see
 [Running with Docker](#running-with-docker) instead.
@@ -74,12 +89,16 @@ runs `php artisan migrate --force`, and caches config, routes, and views. The
 container sets `APP_ENV=production` and `APP_DEBUG=false` as real environment
 variables, which win over the values in `.env` — Laravel loads dotenv immutably.
 
-The entrypoint does not seed. To load the twelve sample projects:
+The entrypoint does not seed. To load the twelve sample projects and the
+`admin@example.com` account:
 
 ```bash
 docker run --rm -p 8000:80 --name project-tracker project-tracker
 docker exec project-tracker php artisan db:seed
 ```
+
+Pass `-e ADMIN_PASSWORD=...` to `docker run` to seed a password other than the
+default `password`.
 
 ### Persisting data
 
@@ -111,7 +130,7 @@ external database instead; the entrypoint then skips the SQLite file entirely.
 | Validation | `app/Http/Requests/{Store,Update}ProjectRequest.php`, rules shared in `app/Concerns/ProjectValidationRules.php` |
 | Model and enums | `app/Models/Project.php`, `app/Enums/Project{Status,Priority}.php` |
 | API responses | `app/Http/Resources/ProjectResource.php` |
-| Seed data | `database/seeders/ProjectSeeder.php` |
+| Seed data | `database/seeders/ProjectSeeder.php`, `database/seeders/AdminUserSeeder.php` |
 | Page and components | `resources/js/pages/projects/index.tsx`, `resources/js/components/projects/` |
 | API client | `resources/js/lib/projects-api.ts` |
 

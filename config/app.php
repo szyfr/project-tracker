@@ -123,4 +123,17 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Seeded Admin Password
+    |--------------------------------------------------------------------------
+    |
+    | The password given to the admin account created by AdminUserSeeder. It
+    | defaults to "password" for local development; set ADMIN_PASSWORD before
+    | seeding anywhere the account is reachable by anyone else.
+    |
+    */
+
+    'admin_password' => env('ADMIN_PASSWORD', 'password'),
+
 ];
