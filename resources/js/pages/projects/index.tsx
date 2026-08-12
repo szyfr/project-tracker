@@ -2,6 +2,11 @@ import { Head } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { DeleteProjectDialog } from '@/components/projects/delete-project-dialog';
+import {
+    ANY_VALUE,
+    ProjectFiltersBar,
+} from '@/components/projects/project-filters';
+import type { ProjectFilters } from '@/components/projects/project-filters';
 import { ProjectFormDialog } from '@/components/projects/project-form-dialog';
 import { ProjectsTable } from '@/components/projects/projects-table';
 import { Button } from '@/components/ui/button';
@@ -15,6 +20,28 @@ export default function Projects() {
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState<Project | null>(null);
     const [deleting, setDeleting] = useState<Project | null>(null);
+    const [filters, setFilters] = useState<ProjectFilters>({
+        search: '',
+        status: ANY_VALUE,
+        priority: ANY_VALUE,
+    });
+
+    const search = filters.search.trim().toLowerCase();
+
+    const visibleProjects = projects.filter((project) => {
+        const matchesSearch =
+            search === '' ||
+            project.client_name.toLowerCase().includes(search) ||
+            project.project_name.toLowerCase().includes(search);
+
+        return (
+            matchesSearch &&
+            (filters.status === ANY_VALUE ||
+                project.status === filters.status) &&
+            (filters.priority === ANY_VALUE ||
+                project.priority === filters.priority)
+        );
+    });
 
     function openCreateForm(): void {
         setEditing(null);
@@ -89,11 +116,28 @@ export default function Projects() {
             )}
 
             {!loading && !error && projects.length > 0 && (
-                <ProjectsTable
-                    projects={projects}
-                    onEdit={openEditForm}
-                    onDelete={setDeleting}
-                />
+                <>
+                    <ProjectFiltersBar
+                        filters={filters}
+                        onChange={setFilters}
+                    />
+
+                    {visibleProjects.length > 0 ? (
+                        <ProjectsTable
+                            projects={visibleProjects}
+                            onEdit={openEditForm}
+                            onDelete={setDeleting}
+                        />
+                    ) : (
+                        <div className="rounded-xl border border-dashed p-12 text-center">
+                            <p className="font-medium">No matching projects</p>
+
+                            <p className="text-sm text-muted-foreground">
+                                Try a different search or clear the filters.
+                            </p>
+                        </div>
+                    )}
+                </>
             )}
 
             {formOpen && (
