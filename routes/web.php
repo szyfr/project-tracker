@@ -5,6 +5,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', 'login')->name('home');
 
-Route::resource('projects', ProjectController::class)->except(['create', 'edit']);
+Route::middleware(['auth'])->group(function () {
+    Route::resource('projects', ProjectController::class)->except(['create', 'edit']);
+});
 
 require __DIR__.'/settings.php';

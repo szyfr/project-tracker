@@ -1,7 +1,12 @@
 <?php
 
 use App\Models\Project;
+use App\Models\User;
 use Database\Seeders\ProjectSeeder;
+
+beforeEach(function () {
+    $this->actingAs(User::factory()->create());
+});
 
 function projectPayload(array $overrides = []): array
 {
