@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { ClipboardList, LayoutGrid } from 'lucide-react';
+import { ClipboardList } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -12,16 +12,10 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { dashboard } from '@/routes';
 import * as projects from '@/routes/projects';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
     {
         title: 'Projects',
         href: projects.index(),
@@ -36,7 +30,7 @@ export function AppSidebar() {
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
-                            <Link href={dashboard()} prefetch>
+                            <Link href={projects.index()} prefetch>
                                 <AppLogo />
                             </Link>
                         </SidebarMenuButton>

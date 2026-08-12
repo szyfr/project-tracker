@@ -6,6 +6,30 @@ priority, and manage them through a REST API.
 Built on the Laravel React starter kit — Laravel 13, Inertia v3, React 19,
 Tailwind v4 with shadcn/ui, SQLite, and Pest.
 
+## Features Implemented
+
+- **Full CRUD over a REST API** — list, read, create, update, and delete client
+  projects at `/projects`, with `snake_case` JSON in and out.
+- **Project list page** — a React table at `/projects` showing client, project,
+  status, priority, and dates, with status badges and priority text.
+- **Create and edit in a dialog** — one form dialog serves both, posting to the
+  API and surfacing per-field `422` errors inline.
+- **Delete with confirmation** — a confirm dialog guards deletion, and the table
+  steps back a page when the last row on a page is removed.
+- **Server-side search and filtering** — search matches `client_name` or
+  `project_name`; status and priority filter by exact enum value. All filtering
+  happens in SQL, not in the browser.
+- **Server-side pagination** — 10 per page by default, `per_page` up to 100,
+  with page metadata returned alongside the data.
+- **Validated input** — shared rules across store and update, enum-backed status
+  and priority, ISO dates bounded to 1900–2100, and `due_date` never earlier
+  than `start_date`.
+- **Loading, empty, and error states** — skeletons while fetching, distinct
+  empty states for "no projects yet" versus "no matches", and a retry button
+  when a request fails.
+- **Test coverage** — Pest feature tests for the API (`ProjectApiTest`) and the
+  page (`ProjectPageTest`), plus Pint, PHPStan level 7, ESLint, and `tsc`.
+
 ## Setup
 
 ```bash
@@ -72,21 +96,42 @@ exemption and send the `X-XSRF-TOKEN` header instead.
 
 ### `GET /projects`
 
-Returns every project, ordered by id.
+Returns a page of projects ordered by id, wrapped in `data` with pagination
+`meta`.
+
+| Query parameter | Notes |
+| --- | --- |
+| `search` | Optional, max 255. Matches `client_name` or `project_name` |
+| `status` | Optional. One of the status values |
+| `priority` | Optional. One of the priority values |
+| `page` | Optional, min 1. Defaults to `1` |
+| `per_page` | Optional, 1–100. Defaults to `10` |
+
+An unknown `status` or `priority` is a `422`, not an empty result.
 
 ```json
-[
-  {
-    "id": 1,
-    "client_name": "Acme Corporation",
-    "project_name": "Corporate Website Redesign",
-    "description": "Redesign and modernize the company's corporate website.",
-    "status": "In Progress",
-    "priority": "High",
-    "start_date": "2026-06-01",
-    "due_date": "2026-07-15"
+{
+  "data": [
+    {
+      "id": 1,
+      "client_name": "Acme Corporation",
+      "project_name": "Corporate Website Redesign",
+      "description": "Redesign and modernize the company's corporate website.",
+      "status": "In Progress",
+      "priority": "High",
+      "start_date": "2026-06-01",
+      "due_date": "2026-07-15"
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "last_page": 2,
+    "per_page": 10,
+    "total": 12,
+    "from": 1,
+    "to": 10
   }
-]
+}
 ```
 
 ### `GET /projects/{id}`
@@ -141,3 +186,33 @@ Validation failures list every failing field:
   }
 }
 ```
+
+## Assumptions Made
+
+- **The project endpoints are public.** The brief did not call for auth, so the
+  routes sit outside the auth middleware and are exempt from CSRF verification
+  so they work from curl or Postman. The starter kit's login and registration
+  remain available, and authenticated users land on `/projects`; putting the
+  tracker behind `auth` means adding the middleware and dropping that CSRF
+  exemption.
+- **Projects have no owner.** There is no `user_id` on `projects` — every user
+  sees the same list. Adding multi-tenancy later means a foreign key, a scope,
+  and a policy.
+- **Status and priority are fixed sets**, modelled as PHP enums rather than a
+  lookup table. Changing the options is a code change plus a data migration.
+- **`PUT` replaces rather than patches.** The resource route exposes `PUT`
+  only, so all required fields must be sent on every update. There is no
+  `PATCH` for partial updates.
+- **Dates are date-only and timezone-free.** `start_date` and `due_date` are
+  stored as `YYYY-MM-DD` with no time component, bounded to 1900–2100 to catch
+  typos. Both are optional, and a `due_date` may be set without a `start_date`.
+- **Search is a case-insensitive `LIKE` scan.** That is fine at this data size;
+  a full-text index would be the next step if the table grows.
+- **Deletes are permanent.** No soft deletes, so the confirm dialog is the only
+  safety net.
+- **SQLite is the database.** It keeps setup to one command; nothing in the
+  schema or queries is SQLite-specific, so another driver works by changing
+  `.env`.
+- **The list page fetches through the JSON API** rather than through Inertia
+  props, so validation errors arrive as `422` responses and the same endpoints
+  serve both the UI and external clients.
