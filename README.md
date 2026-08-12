@@ -94,8 +94,12 @@ The entrypoint does not seed. To load the twelve sample projects and the
 
 ```bash
 docker run --rm -p 8000:80 --name project-tracker project-tracker
-docker exec project-tracker php artisan db:seed
+docker exec project-tracker php artisan db:seed --force
 ```
+
+`--force` is required because the container runs with `APP_ENV=production`, and
+`db:seed` otherwise stops to ask for confirmation — which it cannot do over
+`docker exec`.
 
 Pass `-e ADMIN_PASSWORD=...` to `docker run` to seed a password other than the
 default `password`.
