@@ -7,10 +7,11 @@ import {
     ProjectFiltersBar,
 } from '@/components/projects/project-filters';
 import type { ProjectFilters } from '@/components/projects/project-filters';
+import { ProjectFiltersBarSkeleton } from '@/components/projects/project-filters-skeleton';
 import { ProjectFormDialog } from '@/components/projects/project-form-dialog';
 import { ProjectsTable } from '@/components/projects/projects-table';
+import { ProjectsTableSkeleton } from '@/components/projects/projects-table-skeleton';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useProjects } from '@/hooks/use-projects';
 import { index } from '@/routes/projects';
 import type { Project } from '@/types/project';
@@ -75,13 +76,11 @@ export default function Projects() {
             </div>
 
             {loading && (
-                <div className="space-y-2" aria-busy="true">
-                    <Skeleton className="h-10 w-full" />
+                <>
+                    <ProjectFiltersBarSkeleton />
 
-                    {Array.from({ length: 5 }).map((_, index) => (
-                        <Skeleton key={index} className="h-14 w-full" />
-                    ))}
-                </div>
+                    <ProjectsTableSkeleton />
+                </>
             )}
 
             {!loading && error && (
