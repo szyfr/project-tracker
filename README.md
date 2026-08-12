@@ -44,6 +44,9 @@ The app is then available at http://localhost:8000; the tracker lives at `/proje
 `database/database.sqlite`. Seeding is idempotent — it inserts the same twelve
 projects by id, so re-running never duplicates them.
 
+To run the app without installing PHP or Node locally, see
+[Running with Docker](#running-with-docker) instead.
+
 ### Checks
 
 ```bash
@@ -51,6 +54,53 @@ composer test         # Pint, PHPStan (level 7), and Pest
 npm run lint:check    # ESLint
 npm run types:check   # tsc --noEmit
 ```
+
+## Running with Docker
+
+The `Dockerfile` builds a single self-contained image — PHP 8.4 on FrankenPHP,
+serving the built assets and the SQLite database from inside the container. No
+database service is needed.
+
+```bash
+docker build -t project-tracker .
+docker run --rm -p 8000:80 project-tracker
+```
+
+The app is then available at http://localhost:8000.
+
+`.env` is baked into the image from `.env.example` at build time. On every start
+the entrypoint generates `APP_KEY` if it is not set, creates the SQLite file,
+runs `php artisan migrate --force`, and caches config, routes, and views. The
+container sets `APP_ENV=production` and `APP_DEBUG=false` as real environment
+variables, which win over the values in `.env` — Laravel loads dotenv immutably.
+
+The entrypoint does not seed. To load the twelve sample projects:
+
+```bash
+docker run --rm -p 8000:80 --name project-tracker project-tracker
+docker exec project-tracker php artisan db:seed
+```
+
+### Persisting data
+
+The SQLite file lives at `/app/database/database.sqlite` inside the container,
+so it is lost when the container is removed. Mount a volume to keep it:
+
+```bash
+docker volume create project-tracker-db
+docker run --rm -p 8000:80 -v project-tracker-db:/app/database project-tracker
+```
+
+Pass `-e DB_CONNECTION=pgsql` and the usual `DB_*` variables to point at an
+external database instead; the entrypoint then skips the SQLite file entirely.
+
+### How the build is staged
+
+| Stage | Does |
+| --- | --- |
+| `vendor` | `composer install --no-dev` plus an optimized autoloader |
+| `assets` | `npm ci && npm run build`, on Node with a PHP CLI — the Wayfinder Vite plugin shells out to `php artisan`, and `resources/js/{actions,routes}` are generated, not committed |
+| `runtime` | FrankenPHP, running as `www-data` on port 80 |
 
 ## Architecture
 
