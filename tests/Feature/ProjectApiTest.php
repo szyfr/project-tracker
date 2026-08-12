@@ -69,6 +69,78 @@ test('it creates a project without optional fields', function () {
     ]))->assertCreated()->assertJsonPath('start_date', null);
 });
 
+test('it stores blank optional fields as null', function () {
+    $this->postJson(route('projects.store'), projectPayload([
+        'description' => '',
+        'start_date' => '',
+        'due_date' => '',
+    ]))
+        ->assertCreated()
+        ->assertJsonPath('description', null)
+        ->assertJsonPath('start_date', null)
+        ->assertJsonPath('due_date', null);
+});
+
+test('it accepts values at the length limits', function () {
+    $this->postJson(route('projects.store'), projectPayload([
+        'client_name' => str_repeat('a', 255),
+        'project_name' => str_repeat('b', 255),
+        'description' => str_repeat('c', 2000),
+    ]))->assertCreated();
+
+    expect(Project::query()->first()->description)->toHaveLength(2000);
+});
+
+test('it rejects values beyond the length limits', function (string $field, int $limit) {
+    $this->postJson(route('projects.store'), projectPayload([
+        $field => str_repeat('a', $limit + 1),
+    ]))
+        ->assertStatus(422)
+        ->assertJsonValidationErrors($field);
+})->with([
+    'client name' => ['client_name', 255],
+    'project name' => ['project_name', 255],
+    'description' => ['description', 2000],
+]);
+
+test('it accepts dates at the supported bounds', function () {
+    $this->postJson(route('projects.store'), projectPayload([
+        'start_date' => '1900-01-01',
+        'due_date' => '2100-12-31',
+    ]))->assertCreated()->assertJsonPath('due_date', '2100-12-31');
+});
+
+test('it rejects malformed and out of range dates', function (array $payload, string $field) {
+    $this->postJson(route('projects.store'), projectPayload($payload))
+        ->assertStatus(422)
+        ->assertJsonValidationErrors($field);
+})->with([
+    'unparseable start date' => [['start_date' => 'not-a-date'], 'start_date'],
+    'non ISO start date' => [['start_date' => '12/08/2026'], 'start_date'],
+    'relative due date' => [['due_date' => 'tomorrow'], 'due_date'],
+    'start date before 1900' => [['start_date' => '1899-12-31', 'due_date' => null], 'start_date'],
+    'due date before 1900' => [['start_date' => null, 'due_date' => '1899-12-31'], 'due_date'],
+    'start date after 2100' => [['start_date' => '2101-01-01', 'due_date' => null], 'start_date'],
+    'due date after 2100' => [['start_date' => null, 'due_date' => '2101-01-01'], 'due_date'],
+]);
+
+test('it does not silently truncate an out of range date', function () {
+    $this->postJson(route('projects.store'), projectPayload(['due_date' => '999999-12-31']))
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('due_date');
+
+    expect(Project::query()->count())->toBe(0);
+});
+
+test('it explains an out of range date separately from the start date check', function () {
+    $this->postJson(route('projects.store'), projectPayload([
+        'start_date' => null,
+        'due_date' => '1899-12-31',
+    ]))
+        ->assertStatus(422)
+        ->assertJsonPath('errors.due_date.0', 'Due date must be on or after 1900-01-01.');
+});
+
 test('it rejects invalid project data', function (array $payload, string $field) {
     $this->postJson(route('projects.store'), projectPayload($payload))
         ->assertStatus(422)

@@ -35,6 +35,10 @@ import type {
     ProjectStatus,
 } from '@/types/project';
 
+/** Kept in step with the date bounds in `ProjectValidationRules`. */
+const EARLIEST_DATE = '1900-01-01';
+const LATEST_DATE = '2100-12-31';
+
 const emptyPayload: ProjectPayload = {
     client_name: '',
     project_name: '',
@@ -293,6 +297,8 @@ export function ProjectFormDialog({
                                 id="start_date"
                                 name="start_date"
                                 type="date"
+                                min={EARLIEST_DATE}
+                                max={LATEST_DATE}
                                 value={data.start_date}
                                 onChange={(event) =>
                                     update('start_date', event.target.value)
@@ -310,6 +316,8 @@ export function ProjectFormDialog({
                                 id="due_date"
                                 name="due_date"
                                 type="date"
+                                min={data.start_date || EARLIEST_DATE}
+                                max={LATEST_DATE}
                                 value={data.due_date}
                                 onChange={(event) =>
                                     update('due_date', event.target.value)
