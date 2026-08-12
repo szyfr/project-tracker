@@ -62,11 +62,11 @@ export function ProjectsTableSkeleton({
                             </TableCell>
 
                             <TableCell>
-                                <Skeleton className="h-5 w-20 rounded-full" />
+                                <Skeleton className="h-5 w-28 rounded-md" />
                             </TableCell>
 
                             <TableCell>
-                                <Skeleton className="h-5 w-16 rounded-full" />
+                                <Skeleton className="h-4 w-16" />
                             </TableCell>
 
                             <TableCell>

@@ -1,16 +1,21 @@
+import { CircleCheck, CirclePause, ClipboardList, Loader } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { ProjectPriority, ProjectStatus } from '@/types/project';
 
-const statusStyles: Record<ProjectStatus, string> = {
-    Planning:
-        'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
-    'In Progress':
-        'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
-    'On Hold':
-        'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
-    Completed:
-        'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+const statusIcons: Record<ProjectStatus, LucideIcon> = {
+    Planning: ClipboardList,
+    'In Progress': Loader,
+    'On Hold': CirclePause,
+    Completed: CircleCheck,
+};
+
+const statusIconStyles: Record<ProjectStatus, string> = {
+    Planning: 'text-muted-foreground',
+    'In Progress': 'text-muted-foreground',
+    'On Hold': 'text-muted-foreground',
+    Completed: 'fill-emerald-600 text-background dark:fill-emerald-500',
 };
 
 const priorityStyles: Record<ProjectPriority, string> = {
@@ -20,8 +25,11 @@ const priorityStyles: Record<ProjectPriority, string> = {
 };
 
 export function StatusBadge({ status }: { status: ProjectStatus }) {
+    const Icon = statusIcons[status];
+
     return (
-        <Badge className={cn('border-transparent', statusStyles[status])}>
+        <Badge variant="outline">
+            <Icon className={cn(statusIconStyles[status])} />
             {status}
         </Badge>
     );
@@ -29,8 +37,8 @@ export function StatusBadge({ status }: { status: ProjectStatus }) {
 
 export function PriorityBadge({ priority }: { priority: ProjectPriority }) {
     return (
-        <Badge variant="outline" className={cn(priorityStyles[priority])}>
+        <span className={cn('text-sm font-medium', priorityStyles[priority])}>
             {priority}
-        </Badge>
+        </span>
     );
 }
